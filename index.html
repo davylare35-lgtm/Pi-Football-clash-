@@ -3,188 +3,140 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Pi Football Clash - Stadium Edition</title>
+  <title>Pi Football Clash</title>
   <script src="https://minepi.com"></script>
-  <script src="https://tailwindcss.com"></script>
   <style>
-    body {
-      background-color: #090d16;
-      color: #f8fafc;
-      font-family: system-ui, -apple-system, sans-serif;
-      touch-action: manipulation;
-    }
-    canvas {
-      display: block;
-      width: 100%;
-      height: auto;
-      border-radius: 14px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
-      touch-action: none;
-    }
-    .input-clair {
-      background-color: #ffffff !important;
-      color: #0f172a !important;
-      border: 2px solid #cbd5e1 !important;
-      font-weight: 600;
-    }
-    .input-clair::placeholder {
-      color: #64748b !important;
-      font-weight: 400;
-    }
-    .input-clair:focus {
-      outline: none;
-      border-color: #f59e0b !important;
-      box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35);
-    }
-    .btn-ctrl {
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: none;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: #090d16; color: #f8fafc; max-width: 480px; margin: 0 auto; padding-bottom: 30px; }
+    .hidden { display: none !important; }
+    header { background: #0f172a; border-bottom: 1px solid #1e293b; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 20; }
+    header h1 { font-size: 15px; color: #fbbf24; font-weight: 800; }
+    header p { font-size: 11px; color: #cbd5e1; margin-top: 2px; }
+    .btn-pi { background: #f59e0b; color: #090d16; border: none; font-weight: 800; font-size: 12px; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+    nav { display: grid; grid-template-columns: repeat(4, 1fr); background: #0f172a; border-bottom: 1px solid #1e293b; position: sticky; top: 54px; z-index: 15; }
+    nav button { background: none; border: none; border-bottom: 3px solid transparent; color: #94a3b8; font-weight: 700; font-size: 12px; padding: 11px 4px; cursor: pointer; }
+    nav button.active { border-bottom-color: #fbbf24; color: #fbbf24; }
+    .section { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 14px; }
+    .card h2 { font-size: 14px; color: #fbbf24; margin-bottom: 10px; }
+    label { display: block; font-size: 11px; color: #cbd5e1; font-weight: 600; margin: 8px 0 4px; }
+    input, select { width: 100%; background: #ffffff; color: #0f172a; border: 2px solid #cbd5e1; border-radius: 10px; padding: 9px 10px; font-size: 13px; font-weight: 600; }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn-main { width: 100%; background: #10b981; color: #090d16; border: none; font-weight: 800; font-size: 13px; padding: 12px; border-radius: 10px; margin-top: 12px; cursor: pointer; }
+    .btn-gold { width: 100%; background: #f59e0b; color: #090d16; border: none; font-weight: 800; font-size: 13px; padding: 11px; border-radius: 10px; cursor: pointer; }
+    .defi-item { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 11px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .prog-item { background: #0f172a; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .badge-free { background: #059669; color: #fff; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; border: none; cursor: pointer; }
+    .badge-pi { background: #f59e0b; color: #090d16; font-size: 11px; font-weight: 800; padding: 6px 10px; border-radius: 8px; border: none; cursor: pointer; }
+    .badge-ready { background: #ef4444; color: #fff; font-size: 11px; font-weight: 900; padding: 7px 12px; border-radius: 8px; border: none; cursor: pointer; }
+    .alarm-box { background: #b45309; color: #fff; padding: 12px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 2px solid #fde047; }
+    .scoreboard { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+    .team-box { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; width: 38%; }
+    .score-num { font-size: 20px; font-weight: 900; color: #fbbf24; }
+    .canvas-wrap { position: relative; width: 100%; }
+    canvas { display: block; width: 100%; height: auto; border-radius: 12px; border: 2px solid #334155; touch-action: none; }
+    .goal-banner { position: absolute; top: 44%; left: 50%; transform: translate(-50%, -50%); background: #f59e0b; color: #090d16; font-weight: 900; font-size: 20px; padding: 8px 20px; border-radius: 12px; border: 3px solid #fff; pointer-events: none; }
+    .comment-bar { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 7px; text-align: center; font-size: 11px; color: #fcd34d; font-weight: 600; }
+    .controls-box { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border: 1px solid #1e293b; border-radius: 14px; padding: 10px 12px; }
+    .joy-base { width: 98px; height: 98px; border-radius: 50%; background: #1e293b; border: 2px solid #475569; position: relative; display: flex; align-items: center; justify-content: center; touch-action: none; }
+    .joy-stick { width: 40px; height: 40px; border-radius: 50%; background: #f59e0b; border: 2px solid #fff; pointer-events: none; }
+    .actions-col { display: flex; flex-direction: column; gap: 8px; width: 145px; }
+    .btn-shoot { background: #f59e0b; color: #090d16; border: none; border-bottom: 4px solid #b45309; font-weight: 900; font-size: 14px; padding: 13px; border-radius: 12px; cursor: pointer; touch-action: none; }
+    .btn-sub { background: #0284c7; color: #fff; border: none; font-weight: 700; font-size: 11px; padding: 9px 4px; border-radius: 9px; cursor: pointer; touch-action: none; }
+    .shop-item { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 11px; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
   </style>
 </head>
-<body class="pb-16 max-w-md mx-auto min-h-screen bg-slate-950 shadow-2xl">
-
-  <!-- En-tête -->
-  <header class="bg-slate-900 border-b border-slate-800 p-3.5 flex justify-between items-center sticky top-0 z-20">
+<body>
+  <header>
     <div>
-      <h1 class="text-base font-extrabold text-amber-400 tracking-tight">⚽ Pi Football Clash</h1>
-      <p id="user-status" class="text-[11px] text-slate-300 font-medium">Mode Invité (Non connecté)</p>
+      <h1>⚽ Pi Football Clash</h1>
+      <p id="user-status">Mode Invité (Non connecté)</p>
     </div>
-    <button type="button" id="btn-login" onclick="connecterPi()" class="bg-amber-500 hover:bg-amber-400 active:scale-95 transition text-slate-950 font-extrabold text-xs px-3 py-2 rounded-lg shadow">
-      Connexion Pi
-    </button>
+    <button type="button" class="btn-pi" id="btn-login" onclick="connecterPi()">Connexion Pi</button>
   </header>
 
-  <!-- Navigation par onglets -->
-  <nav class="grid grid-cols-4 bg-slate-900 border-b border-slate-800 text-xs font-bold text-center sticky top-[61px] z-10">
-    <button type="button" onclick="afficherOnglet('duels')" id="tab-duels" class="p-3 border-b-2 border-amber-400 text-amber-400 transition">Duels</button>
-    <button type="button" onclick="afficherOnglet('terrain')" id="tab-terrain" class="p-3 border-b-2 border-transparent text-slate-400 hover:text-white transition">Match Live</button>
-    <button type="button" onclick="afficherOnglet('tournoi')" id="tab-tournoi" class="p-3 border-b-2 border-transparent text-slate-400 hover:text-white transition">Coupe 8</button>
-    <button type="button" onclick="afficherOnglet('equipe')" id="tab-equipe" class="p-3 border-b-2 border-transparent text-slate-400 hover:text-white transition">Mon Club</button>
+  <nav>
+    <button type="button" id="tab-duels" class="active" onclick="showTab('duels')">Duels</button>
+    <button type="button" id="tab-terrain" onclick="showTab('terrain')">Match Live</button>
+    <button type="button" id="tab-tournoi" onclick="showTab('tournoi')">Coupe 8</button>
+    <button type="button" id="tab-equipe" onclick="showTab('equipe')">Mon Club</button>
   </nav>
 
-  <!-- ONGLET 1 : TABLEAU DES INVITATIONS DE DUEL -->
-  <main id="section-duels" class="p-4 space-y-5">
-    <div class="bg-slate-800/90 p-4 rounded-2xl border border-slate-700 shadow-lg">
-      <h2 class="font-extrabold text-sm mb-3 text-amber-400">📅 Lancer un défi d'adresse</h2>
-      <div class="space-y-3 text-sm">
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Nom de votre club</label>
-          <input id="input-equipe" type="text" placeholder="Ex: FC Lomé, Lions Pi..." class="input-clair w-full p-2.5 rounded-xl text-sm" />
-        </div>
-        <div class="grid grid-cols-2 gap-2.5">
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Date du match</label>
-            <input id="input-date" type="date" class="input-clair w-full p-2.5 rounded-xl text-xs" />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Heure</label>
-            <input id="input-heure" type="time" class="input-clair w-full p-2.5 rounded-xl text-xs" />
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Catégorie du défi</label>
-          <select id="input-mise" class="input-clair w-full p-2.5 rounded-xl text-xs">
-            <option value="0">Match Amical (Entraînement Gratuit)</option>
-            <option value="0.5">Défi Classé - Inscription 0.5 Pi (Récompense : 0.95 Pi)</option>
-            <option value="1">Défi Élite - Inscription 1 Pi (Récompense : 1.90 Pi)</option>
-          </select>
-        </div>
-        <button type="button" onclick="creerInvitation()" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition text-slate-950 font-extrabold py-3 rounded-xl mt-2 shadow-md">
-          Publier le défi sur le tableau
-        </button>
+  <div id="sec-duels" class="section">
+    <div id="alarm-banner" class="alarm-box hidden">
+      <div>
+        <div style="font-size:12px;font-weight:900;">🔔 C'EST L'HEURE DU MATCH !</div>
+        <div id="alarm-text" style="font-size:11px;">Votre duel est prêt.</div>
       </div>
+      <button type="button" class="btn-pi" style="background:#fff;" onclick="declencherMatchProgramme()">JOUER</button>
+    </div>
+
+    <div id="box-programmes" class="hidden">
+      <h3 style="font-size:13px; margin-bottom:6px; color:#fbbf24;">⏱️ Matchs programmés (Acceptés)</h3>
+      <div id="liste-programmes"></div>
+    </div>
+
+    <div class="card">
+      <h2>📅 Lancer une invitation de duel</h2>
+      <label>Nom de votre club</label>
+      <input id="in-equipe" type="text" placeholder="Ex: FC Lomé, Lions Pi..." />
+      <div class="row-2">
+        <div>
+          <label>Date du match</label>
+          <input id="in-date" type="date" />
+        </div>
+        <div>
+          <label>Heure du coup d'envoi</label>
+          <input id="in-heure" type="time" />
+        </div>
+      </div>
+      <label>Catégorie & Récompense</label>
+      <select id="in-mise">
+        <option value="0">Entraînement / Match Amical (Gratuit)</option>
+        <option value="0.5">Défi Classé - Inscription 0.5 Pi (Gain : 0.95 Pi)</option>
+        <option value="1">Défi Élite - Inscription 1 Pi (Gain : 1.90 Pi)</option>
+      </select>
+      <button type="button" class="btn-main" onclick="creerDefi()">Publier l'invitation sur le tableau</button>
     </div>
 
     <div>
-      <h3 class="font-bold text-sm text-slate-200 mb-2.5">🔥 Défis ouverts (Cliquez pour affronter)</h3>
-      <div id="liste-invitations" class="space-y-2.5"></div>
+      <h3 style="font-size:13px; margin-bottom:8px; color:#e2e8f0;">🔥 Invitations ouvertes (Cliquez pour accepter)</h3>
+      <div id="liste-defis"></div>
     </div>
-  </main>
+  </div>
 
-  <!-- ONGLET 2 : STADE & MATCH LIVE HAUTE FLUIDITÉ -->
-  <section id="section-terrain" class="p-3 hidden space-y-2.5">
-    <!-- Tableau d'affichage TV -->
-    <div class="bg-slate-900 px-3 py-2 rounded-xl flex justify-between items-center border border-slate-700 shadow">
-      <div class="flex items-center gap-2 w-2/5">
-        <span class="w-3 h-3 rounded-full bg-amber-400 inline-block shrink-0"></span>
-        <p class="text-xs text-white font-bold truncate" id="match-team-a">Mon Club</p>
-        <p class="text-xl font-black text-amber-400 ml-auto" id="score-a">0</p>
+  <div id="sec-terrain" class="section hidden">
+    <div class="scoreboard">
+      <div class="team-box">
+        <span style="width:9px;height:9px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>
+        <span id="team-a-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Mon Club</span>
+        <span class="score-num" id="score-a" style="margin-left:auto;">0</span>
       </div>
-      <div class="text-center px-2">
-        <span id="badge-statut" class="bg-emerald-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded">LIVE</span>
-        <p class="text-xs font-mono font-bold text-white mt-0.5" id="chrono">01:00</p>
+      <div style="text-align:center;">
+        <span id="mode-badge" style="background:#059669;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;">ENTRAÎNEMENT</span>
+        <div id="chrono" style="font-size:12px;font-weight:800;margin-top:2px;">01:00</div>
       </div>
-      <div class="flex items-center gap-2 w-2/5">
-        <p class="text-xl font-black text-sky-400 mr-auto" id="score-b">0</p>
-        <p class="text-xs text-white font-bold truncate" id="match-team-b">Adversaire</p>
-        <span class="w-3 h-3 rounded-full bg-sky-500 inline-block shrink-0"></span>
+      <div class="team-box" style="justify-content:flex-end;">
+        <span class="score-num" id="score-b" style="color:#38bdf8;margin-right:auto;">0</span>
+        <span id="team-b-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Adversaire</span>
+        <span style="width:9px;height:9px;border-radius:50%;background:#0284c7;display:inline-block;"></span>
       </div>
     </div>
 
-    <!-- Stade Canvas Réaliste (Spectateurs, Arbitres, Joueurs articulés) -->
-    <div class="relative">
-      <canvas id="stadeCanvas" width="380" height="500"></canvas>
-      <div id="overlay-but" class="hidden absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span class="bg-amber-500 text-slate-950 font-black text-2xl px-6 py-2 rounded-2xl shadow-2xl border-4 border-white animate-bounce">
-          ⚽ BUUUUT !
-        </span>
-      </div>
+    <div class="canvas-wrap">
+      <canvas id="stade" width="360" height="450"></canvas>
+      <div id="goal-msg" class="goal-banner hidden">⚽ BUUUUT !</div>
     </div>
 
-    <!-- Commentaire de l'arbitre / match -->
-    <div class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-center">
-      <p id="commentaire-match" class="text-[11px] text-amber-300 font-semibold">Arbitre prêt : Utilisez le joystick pour courir et TIRER !</p>
-    </div>
+    <div class="comment-bar" id="commentaire">Glissez le joystick à gauche pour courir et appuyez sur TIRER !</div>
 
-    <!-- Contrôles tactiles analogiques fluides (60 FPS) -->
-    <div class="flex justify-between items-center bg-slate-900/90 p-3 rounded-2xl border border-slate-800">
-      <!-- Joystick analogique gauche -->
-      <div id="joystick-zone" class="relative w-28 h-28 rounded-full bg-slate-800 border-2 border-slate-600 flex items-center justify-center btn-ctrl shadow-inner">
-        <div id="joystick-knob" class="w-11 h-11 rounded-full bg-amber-400 border-2 border-white shadow-lg pointer-events-none transition-transform duration-75"></div>
+    <div class="controls-box">
+      <div class="joy-base" id="joy-zone">
+        <div class="joy-stick" id="joy-knob"></div>
       </div>
-
-      <!-- Boutons d'action droite -->
-      <div class="flex flex-col gap-2.5 w-36">
-        <button type="button" onpointerdown="declencherTir()" class="btn-ctrl w-full bg-amber-500 active:bg-amber-400 active:scale-95 text-slate-950 font-black py-3.5 rounded-xl text-sm shadow-lg border-b-4 border-amber-700">
-          ⚽ TIRER
-        </button>
-        <div class="grid grid-cols-2 gap-2">
-          <button type="button" onpointerdown="activerSprint(true)" onpointerup="activerSprint(false)" onpointerleave="activerSprint(false)" class="btn-ctrl bg-sky-600 active:bg-sky-500 text-white font-bold py-2.5 rounded-xl text-xs shadow">
-            ⚡ Sprint
-          </button>
-          <button type="button" onclick="demarrerMatch()" class="bg-emerald-600 active:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs shadow">
-            🔄 Reset
-          </button>
+      <div class="actions-col">
+        <button type="button" class="btn-shoot" onpointerdown="tirer()">⚽ TIRER</button>
+        <div class="row-2">
+          <button type="button" class="btn-sub" onpointerdown="sprint=true" onpointerup="sprint=false" onpointerleave="sprint=false">⚡ Sprint</button>
+          <button type="button" class="btn-sub" style="background:#059669;" onclick="startMatch('ENTRAÎNEMENT', 'IA Club', 0)">🎯 Gratuit</button>
         </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ONGLET 3 : COUPE EXPRESS (8 JOUEURS) -->
-  <section id="section-tournoi" class="p-4 hidden space-y-4">
-    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-lg">
-      <div class="flex justify-between items-center mb-2">
-        <h2 class="font-extrabold text-amber-400 text-sm">🏆 Coupe Express (8 Équipes)</h2>
-        <span id="compteur-tournoi" class="bg-emerald-900 text-emerald-300 text-xs font-bold px-2.5 py-1 rounded-full">6 / 8 inscrits</span>
-      </div>
-      <p class="text-xs text-slate-300 mb-3 leading-relaxed">
-        Tournoi compétitif d'adresse. Dès que la 8e équipe s'inscrit, le tableau des Quarts, Demi-finales et Finale se génère automatiquement.
-      </p>
-      <button type="button" id="btn-rejoindre-coupe" onclick="rejoindreTournoi()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold py-3 rounded-xl text-sm shadow">
-        Rejoindre le Tournoi (Frais : 1 Pi • Prix : 7 Pi)
-      </button>
-    </div>
-
-    <div id="arbre-tournoi" class="bg-slate-800 p-4 rounded-2xl border border-slate-700 space-y-2.5 text-xs">
-      <h3 class="font-bold text-slate-200 mb-2">📋 Tableau officiel du tournoi :</h3>
-      <div id="liste-matchs-tournoi" class="space-y-2 text-slate-300">
-        <p class="text-slate-400 italic">En attente des 8 participants (encore 2 places libres)...</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ONGLET 4 : MON CLUB & BOUTIQUE PI -->
-  <section id="section-equipe" class="p-4 hidden space-y-4">
-    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 shadow-lg">
