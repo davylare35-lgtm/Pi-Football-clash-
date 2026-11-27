@@ -1,237 +1,294 @@
-const Pi = window.Pi;
-if (Pi) { try { Pi.init({ version: "2.0", sandbox: true }); } catch(e) {} }
-
-let userPi = JSON.parse(localStorage.getItem("pfc_user")) || null;
-let noteClub = parseInt(localStorage.getItem("pfc_note")) || 65;
-const aujourdhui = new Date().toISOString().slice(0, 10);
-let defis = JSON.parse(localStorage.getItem("pfc_defis")) || [
-  { id: 101, equipe: "FC Barcelone Pi", date: aujourdhui, heure: "23:59", mise: "0.5" },
-  { id: 102, equipe: "Accra Stars (Entraînement)", date: aujourdhui, heure: "23:59", mise: "0" }
+// ==========================================
+// 1. INITIALISATION & DONNÉES GLOBALES
+// ==========================================
+let piUser = null;
+let clubNote = parseInt(localStorage.getItem('pfc_note')) || 65;
+let defis = JSON.parse(localStorage.getItem('pfc_defis')) || [
+  { id: 1, club: "Lions de Dakar", date: "Aujourd'hui", heure: "20:00", mise: 0 },
+  { id: 2, club: "Aigles de Carthage", date: "Aujourd'hui", heure: "21:30", mise: 0.5 }
 ];
-let programmes = JSON.parse(localStorage.getItem("pfc_prog")) || [];
-let inscrits = 6;
-let matchProgActif = null;
-let enjeuActuel = 0;
+let matchsProgrammes = JSON.parse(localStorage.getItem('pfc_prog')) || [];
+let coupeInscrits = 6;
+let inscritCoupe = false;
 
-if (userPi) appliquerConnexionUI(userPi);
+// Initialisation sécurisée du SDK Pi Network
+document.addEventListener("DOMContentLoaded", () => {
+  if (window.Pi) {
+    try {
+      window.Pi.init({ version: "2.0", sandbox: true }); // Passez sandbox à false en production
+    } catch (e) {
+      console.warn("Erreur init Pi SDK :", e);
+    }
+  }
+  majInterfaceClub();
+  afficherDefis();
+  afficherProgrammes();
+  initJoystick();
+  dessinerTerrainStatique();
+  setInterval(verifierAlarmes, 10000);
+});
 
-function appliquerConnexionUI(u) {
-  document.getElementById("user-status").textContent = "Connecté : @" + u.username;
-  document.getElementById("user-status").style.color = "#34d399";
-  document.getElementById("btn-login").textContent = "✓ @" + u.username;
-  document.getElementById("team-a-name").textContent = u.username;
-}
-
-function showTab(id) {
-  ["duels", "terrain", "tournoi", "equipe"].forEach(function(t) {
-    document.getElementById("sec-" + t).classList.add("hidden");
-    document.getElementById("tab-" + t).classList.remove("active");
+// ==========================================
+// 2. NAVIGATION ENTRE LES ONGLETS
+// ==========================================
+function showTab(tabName) {
+  const sections = ['duels', 'terrain', 'tournoi', 'equipe'];
+  sections.forEach(sec => {
+    const elSec = document.getElementById('sec-' + sec);
+    const elTab = document.getElementById('tab-' + sec);
+    if (elSec) elSec.classList.add('hidden');
+    if (elTab) elTab.classList.remove('active');
   });
-  document.getElementById("sec-" + id).classList.remove("hidden");
-  document.getElementById("tab-" + id).classList.add("active");
-  if (id === "terrain" && !running) startMatch("ENTRAÎNEMENT", "IA Club", 0);
+
+  const activeSec = document.getElementById('sec-' + tabName);
+  const activeTab = document.getElementById('tab-' + tabName);
+  if (activeSec) activeSec.classList.remove('hidden');
+  if (activeTab) activeTab.classList.add('active');
+
+  if (tabName === 'terrain' && !matchEnCours) {
+    dessinerTerrainStatique();
+  }
 }
 
-async function connecterPi() {
-  if (!Pi) { alert("Ouvrez ce jeu dans le Pi Browser pour vous connecter."); return; }
-  try {
-    const auth = await Pi.authenticate(["username", "payments"], function(p) {
-      fetch("/api/complete", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ paymentId: p.identifier, txid: p.transaction?.txid || "" }) });
-    });
-    userPi = auth.user;
-    localStorage.setItem("pfc_user", JSON.stringify(userPi));
-    appliquerConnexionUI(userPi);
-  } catch (e) { alert("Connexion Pi impossible : " + (e.message || e)); }
-}
-
-function payerPi(montant, memo, okCallback) {
-  if (!userPi) {
-    alert("Veuillez d'abord vous connecter avec votre compte Pi.");
-    connecterPi();
+// ==========================================
+// 3. CONNEXION PI NETWORK & PAIEMENTS
+// ==========================================
+function connecterPi() {
+  if (!window.Pi) {
+    alert("⚠️ Veuillez ouvrir l'application dans le Pi Browser pour connecter votre compte Pi.");
     return;
   }
-  Pi.createPayment({ amount: montant, memo: memo, metadata: { user: userPi.username } }, {
-    onReadyForServerApproval: function(pid) {
-      fetch("/api/approve", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ paymentId: pid }) });
+
+  const scopes = ['username', 'payments'];
+  window.Pi.authenticate(scopes, onIncompletePaymentFound)
+    .then(function(auth) {
+      piUser = auth.user;
+      document.getElementById('user-status').textContent = "✅ Connecté : @" + piUser.username;
+      const btn = document.getElementById('btn-login');
+      btn.textContent = "@" + piUser.username;
+      btn.style.background = "#059669";
+      btn.style.color = "#fff";
+    })
+    .catch(function(error) {
+      console.error(error);
+      alert("Connexion annulée ou impossible. Vérifiez que vous êtes sur Pi Browser.");
+    });
+}
+
+function onIncompletePaymentFound(payment) {
+  console.log("Paiement incomplet détecté :", payment);
+}
+
+function executerPaiementPi(montant, memo, onSuccessCallback) {
+  if (montant <= 0) {
+    onSuccessCallback();
+    return;
+  }
+
+  if (!window.Pi || !piUser) {
+    const simuler = confirm(`Mode Invité / Hors Pi Browser.\nVoulez-vous simuler le paiement de ${montant} Pi pour "${memo}" ?`);
+    if (simuler) onSuccessCallback();
+    return;
+  }
+
+  window.Pi.createPayment({
+    amount: parseFloat(montant),
+    memo: memo,
+    metadata: { app: "PiFootballClash" }
+  }, {
+    onReadyForServerApproval: function(paymentId) {
+      console.log("Approbation serveur requise :", paymentId);
     },
-    onReadyForServerCompletion: function(pid, txid) {
-      fetch("/api/complete", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ paymentId: pid, txid: txid }) }).then(okCallback);
+    onReadyForServerCompletion: function(paymentId, txid) {
+      console.log("Transaction terminée :", txid);
+      onSuccessCallback();
     },
-    onCancel: function() { alert("Transaction annulée."); },
-    onError: function(e) { alert("Erreur paiement : " + (e.message || e)); }
-  });
-}
-
-function creerDefi() {
-  const eq = document.getElementById("in-equipe").value.trim();
-  const dt = document.getElementById("in-date").value;
-  const hr = document.getElementById("in-heure").value;
-  const ms = document.getElementById("in-mise").value;
-  if (!eq || !dt || !hr) { alert("Remplissez le nom du club, la date et l'heure."); return; }
-
-  const publier = function() {
-    defis.unshift({ id: Date.now(), equipe: eq, date: dt, heure: hr, mise: ms });
-    localStorage.setItem("pfc_defis", JSON.stringify(defis));
-    document.getElementById("in-equipe").value = "";
-    renderUI();
-    alert("Invitation publiée ! Dès qu'elle est acceptée et que l'heure sonne (" + hr + "), le match pourra être lancé.");
-  };
-
-  if (parseFloat(ms) > 0) payerPi(parseFloat(ms), "Invitation Duel " + eq, publier);
-  else publier();
-}
-
-function accepterInvitation(id) {
-  const idx = defis.findIndex(d => d.id === id);
-  if (idx === -1) return;
-  const defi = defis[idx];
-
-  const valider = function() {
-    defis.splice(idx, 1);
-    localStorage.setItem("pfc_defis", JSON.stringify(defis));
-    const advNom = userPi ? "@" + userPi.username : "Challenger Pi";
-    programmes.unshift({ id: defi.id, equipeA: defi.equipe, equipeB: advNom, date: defi.date, heure: defi.heure, mise: defi.mise, autoLance: false });
-    localStorage.setItem("pfc_prog", JSON.stringify(programmes));
-    renderUI();
-    verifierHeureMatchs();
-  };
-
-  if (parseFloat(defi.mise) > 0) payerPi(parseFloat(defi.mise), "Duel vs " + defi.equipe, valider);
-  else valider();
-}
-
-function verifierHeureMatchs() {
-  const maintenant = new Date();
-  let alerte = null;
-
-  programmes.forEach(function(m) {
-    const cible = new Date(m.date + "T" + m.heure + ":00");
-    m.estPret = (cible - maintenant) <= 0;
-    if (m.estPret) {
-      alerte = m;
-      if (!m.autoLance) {
-        m.autoLance = true;
-        localStorage.setItem("pfc_prog", JSON.stringify(programmes));
-        matchProgActif = m;
-        declencherMatchProgramme();
-      }
+    onCancel: function(paymentId) {
+      alert("Paiement annulé.");
+    },
+    onError: function(error, payment) {
+      console.error("Erreur paiement :", error);
+      alert("Erreur lors du paiement Pi.");
     }
   });
+}
 
-  const banner = document.getElementById("alarm-banner");
-  if (alerte) {
-    matchProgActif = alerte;
-    banner.classList.remove("hidden");
-    document.getElementById("alarm-text").textContent = alerte.equipeA + " vs " + alerte.equipeB + " (" + alerte.heure + ")";
-  } else {
-    banner.classList.add("hidden");
+// ==========================================
+// 4. GESTION DES DUELS & INVITATIONS
+// ==========================================
+function creerDefi() {
+  const club = document.getElementById('in-equipe').value.trim();
+  const date = document.getElementById('in-date').value;
+  const heure = document.getElementById('in-heure').value;
+  const mise = parseFloat(document.getElementById('in-mise').value);
+
+  if (!club) {
+    alert("Veuillez entrer le nom de votre club !");
+    return;
   }
-  renderProgrammes();
+
+  const finaliserCreation = () => {
+    const nouveauDefi = {
+      id: Date.now(),
+      club: club,
+      date: date || "Aujourd'hui",
+      heure: heure || "Immédiat",
+      mise: mise
+    };
+
+    defis.unshift(nouveauDefi);
+    localStorage.setItem('pfc_defis', JSON.stringify(defis));
+    afficherDefis();
+
+    document.getElementById('in-equipe').value = "";
+    alert("✅ Votre invitation de duel a été publiée !");
+  };
+
+  executerPaiementPi(mise, `Inscription Duel : ${club}`, finaliserCreation);
+}
+
+function afficherDefis() {
+  const conteneur = document.getElementById('liste-defis');
+  if (!conteneur) return;
+
+  if (defis.length === 0) {
+    conteneur.innerHTML = `<p style="font-size:12px;color:#94a3b8">Aucune invitation ouverte pour le moment.</p>`;
+    return;
+  }
+
+  conteneur.innerHTML = defis.map(d => {
+    const badge = d.mise === 0
+      ? `<span class="badge-free">Amical (Gratuit)</span>`
+      : `<span class="badge-pi" style="background:#f59e0b;color:#000;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:800">Mise : ${d.mise} Pi</span>`;
+
+    return `
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:10px">
+        <div>
+          <div style="font-weight:800;font-size:14px">🛡️ ${d.club}</div>
+          <div style="font-size:11px;color:#94a3b8">📅 ${d.date} à ${d.heure} • ${badge}</div>
+        </div>
+        <button type="button" class="btn-pi" onclick="accepterDefi(${d.id})">Défier</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function accepterDefi(id) {
+  const defi = defis.find(d => d.id === id);
+  if (!defi) return;
+
+  const lancer = () => {
+    defis = defis.filter(d => d.id !== id);
+    localStorage.setItem('pfc_defis', JSON.stringify(defis));
+    afficherDefis();
+
+    if (defi.heure !== "Immédiat" && defi.date !== "Aujourd'hui") {
+      matchsProgrammes.push(defi);
+      localStorage.setItem('pfc_prog', JSON.stringify(matchsProgrammes));
+      afficherProgrammes();
+      alert(`⏱️ Match programmé contre ${defi.club} le ${defi.date} à ${defi.heure} !`);
+    } else {
+      startMatch(defi.mise > 0 ? `DUEL ${defi.mise} PI` : 'MATCH AMICAL', defi.club, defi.mise);
+    }
+  };
+
+  executerPaiementPi(defi.mise, `Rejoindre Duel contre ${defi.club}`, lancer);
+}
+
+function afficherProgrammes() {
+  const box = document.getElementById('box-programmes');
+  const liste = document.getElementById('liste-programmes');
+  if (!box || !liste) return;
+
+  if (matchsProgrammes.length === 0) {
+    box.classList.add('hidden');
+    return;
+  }
+
+  box.classList.remove('hidden');
+  liste.innerHTML = matchsProgrammes.map(m => `
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:8px;margin-bottom:6px;border-left:3px solid #fbbf24">
+      <div style="font-size:12px"><strong>Vs ${m.club}</strong> (${m.date} - ${m.heure})</div>
+      <button type="button" class="btn-pi" style="font-size:11px;padding:4px 8px" onclick="startMatch('DUEL PROGRAMMÉ', '${m.club}', ${m.mise})">Jouer</button>
+    </div>
+  `).join('');
+}
+
+function verifierAlarmes() {
+  if (matchsProgrammes.length > 0) {
+    const banner = document.getElementById('alarm-banner');
+    const txt = document.getElementById('alarm-text');
+    if (banner && txt) {
+      txt.textContent = `Votre match contre ${matchsProgrammes[0].club} est prêt !`;
+      banner.classList.remove('hidden');
+    }
+  }
 }
 
 function declencherMatchProgramme() {
-  if (!matchProgActif) return;
-  const m = matchProgActif;
-  showTab("terrain");
-  startMatch(parseFloat(m.mise) > 0 ? "DUEL " + m.mise + " PI" : "DUEL AMICAL", m.equipeA + " vs " + m.equipeB, parseFloat(m.mise));
+  if (matchsProgrammes.length === 0) return;
+  const match = matchsProgrammes.shift();
+  localStorage.setItem('pfc_prog', JSON.stringify(matchsProgrammes));
+  afficherProgrammes();
+  document.getElementById('alarm-banner').classList.add('hidden');
+  startMatch('DUEL OFFICIEL', match.club, match.mise);
 }
 
-function lancerMatchDirect(id) {
-  const m = programmes.find(p => p.id === id);
-  if (!m) return;
-  matchProgActif = m;
-  declencherMatchProgramme();
-}
-
-setInterval(verifierHeureMatchs, 3000);
-
+// ==========================================
+// 5. TOURNOI COUPE 8 & BOUTIQUE DU CLUB
+// ==========================================
 function rejoindreCoupe() {
-  if (inscrits >= 8) return;
-  payerPi(1, "Coupe Express 8", function() {
-    inscrits = 8;
-    document.getElementById("coupe-count").textContent = "8 / 8 (COMPLET)";
-    document.getElementById("btn-coupe").textContent = "✓ Inscrit au tournoi";
-    const moi = userPi ? "@" + userPi.username : "Mon Club";
-    document.getElementById("coupe-arbre").innerHTML = `
-      <div style="background:#0f172a;padding:10px;border-radius:8px;border:1px solid #f59e0b;margin-bottom:6px;">
-        <div style="color:#fbbf24;font-weight:700;margin-bottom:6px;">Quart 1 : ${moi} vs FC Barcelone Pi</div>
-        <button type="button" class="badge-free" onclick="showTab('terrain');startMatch('QUART COUPE', 'FC Barcelone Pi', 1)">Jouer mon Quart</button>
+  if (inscritCoupe) {
+    alert("Vous êtes déjà inscrit à cette Coupe Express !");
+    return;
+  }
+
+  executerPaiementPi(1, "Inscription Coupe Express 8", () => {
+    inscritCoupe = true;
+    coupeInscrits++;
+    document.getElementById('coupe-count').textContent = `${coupeInscrits} / 8 inscrits`;
+    const btn = document.getElementById('btn-coupe');
+    btn.textContent = "✅ Inscrit (En attente du dernier joueur)";
+    btn.style.background = "#059669";
+
+    document.getElementById('coupe-arbre').innerHTML = `
+      <div style="color:#e2e8f0;line-height:1.6">
+        <div>🔹 Quart 1 : <strong>Mon Club</strong> vs FC Bamako</div>
+        <div>🔹 Quart 2 : Lions Pi vs Abidjan Stars</div>
+        <div>🔹 Quart 3 : Dakar United vs Cotonou FC</div>
+        <div>🔹 Quart 4 : Kinshasa City vs <em>(1 place libre...)</em></div>
       </div>
-      <div style="padding:5px 0;">Quart 2 : Accra Stars vs Lions de l'Atlas</div>
-      <div style="padding:5px 0;">Quart 3 : Éléphants Pi vs Aigles de Carthage</div>
-      <div style="padding:5px 0;">Quart 4 : Real Pi Madrid vs Bayern Crypto</div>
     `;
   });
 }
 
-function acheterPack(nom, prix, bonus) {
-  payerPi(prix, nom, function() {
-    noteClub = Math.min(99, noteClub + bonus);
-    localStorage.setItem("pfc_note", noteClub);
-    renderUI();
-    alert("Amélioration activée : " + nom);
+function acheterPack(nomPack, prix, bonusNote) {
+  executerPaiementPi(prix, `Achat ${nomPack}`, () => {
+    clubNote = Math.min(99, clubNote + bonusNote);
+    localStorage.setItem('pfc_note', clubNote);
+    majInterfaceClub();
+    alert(`🎉 Félicitations ! ${nomPack} activé. La note de votre club est maintenant de ${clubNote}/100 !`);
   });
 }
 
-function renderProgrammes() {
-  const box = document.getElementById("box-programmes");
-  const list = document.getElementById("liste-programmes");
-  if (programmes.length === 0) { box.classList.add("hidden"); return; }
-  box.classList.remove("hidden");
-  list.innerHTML = programmes.map(function(m) {
-    const btnHtml = m.estPret
-      ? `<button type="button" class="badge-ready" onclick="lancerMatchDirect(${m.id})">⚽ COUP D'ENVOI</button>`
-      : `<span style="font-size:11px;color:#fbbf24;font-weight:700;">⏳ Prévu à ${m.heure}</span>`;
-    return `<div class="prog-item">
-      <div>
-        <div style="font-size:13px;font-weight:800;color:#fff;">⚔️ ${m.equipeA} vs ${m.equipeB}</div>
-        <div style="font-size:11px;color:#cbd5e1;margin-top:2px;">📅 ${m.date} à ${m.heure}</div>
-      </div>
-      ${btnHtml}
-    </div>`;
-  }).join("");
+function majInterfaceClub() {
+  const el = document.getElementById('club-note');
+  if (!el) return;
+  let rang = "Académie";
+  if (clubNote >= 85) rang = "Élite Mondiale";
+  else if (clubNote >= 75) rang = "Division Pro";
+  el.textContent = `${rang} (${clubNote}/100)`;
 }
 
-function renderUI() {
-  const rang = noteClub >= 85 ? "Élite" : (noteClub >= 75 ? "Pro" : "Académie");
-  document.getElementById("club-note").textContent = rang + " (" + noteClub + "/100)";
-  document.getElementById("liste-defis").innerHTML = defis.map(function(d) {
-    const pay = parseFloat(d.mise) > 0;
-    return `<div class="defi-item">
-      <div>
-        <div style="font-size:13px;font-weight:700;">⚽ ${d.equipe}</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:2px;">📅 ${d.date} à ${d.heure}</div>
-      </div>
-      <button type="button" class="${pay ? 'badge-pi' : 'badge-free'}" onclick="accepterInvitation(${d.id})">
-        Accepter (${pay ? d.mise + ' Pi' : 'Gratuit'})
-      </button>
-    </div>`;
-  }).join("");
-  renderProgrammes();
-}
+// ==========================================
+// 6. MOTEUR DE JEU (CANVAS & JOYSTICK)
+// ==========================================
+let matchEnCours = false;
+let matchInterval = null;
+let animFrame = null;
+let tempsRestant = 60;
+let scoreA = 0;
+let scoreB = 0;
+let sprint = false;
+let miseActuelle = 0;
 
-const canvas = document.getElementById("stade");
-const ctx = canvas.getContext("2d");
-const P = { x: 26, y: 34, w: 308, h: 382 };
-let running = false, scA = 0, scB = 0, timeLeft = 60, timerId = null, tick = 0, celeb = 0, sprint = false;
-
-let joy = { x: 0, y: 0 }, drag = false;
-const jZone = document.getElementById("joy-zone"), jKnob = document.getElementById("joy-knob");
-function moveJoy(e) {
-  if (!drag) return;
-  const r = jZone.getBoundingClientRect();
-  const cx = e.touches ? e.touches.clientX : e.clientX;
-  const cy = e.touches ? e.touches.clientY : e.clientY;
-  let dx = cx - (r.left + r.width/2), dy = cy - (r.top + r.height/2);
-  const dist = Math.hypot(dx, dy), max = 34;
-  if (dist > max) { dx = (dx/dist)*max; dy = (dy/dist)*max; }
-  jKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-  joy.x = dx / max; joy.y = dy / max;
-}
-jZone.addEventListener("pointerdown", e => { drag = true; jZone.setPointerCapture(e.pointerId); moveJoy(e); });
-jZone.addEventListener("pointermove", moveJoy);
-jZone.addEventListener("pointerup", () => { drag = false; jKnob.style.transform = "translate(0,0)"; joy = {x:0, y:0}; });
-
-let ball = { x: 180, y: 225, vx: 0, vy: 0 };
-let teamA = [
-  { role:"GK", x:180, y:402, hx:180, hy:402, c:"#f59e0b", s:"#0f172a", skin:"#8d5524", step:0 },
